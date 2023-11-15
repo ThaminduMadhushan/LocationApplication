@@ -3,17 +3,21 @@ package com.app.locationapplication;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
+
+import com.app.locationapplication.utils.NetworkUtils;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.net.MalformedURLException;
+import java.net.URL;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
@@ -27,60 +31,75 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //Adding findViewById to relevant fields
         cityEd = findViewById(R.id.city_et);
         resultTv = findViewById(R.id.result_tv);
         btnFetch = findViewById(R.id.btn_fet);
-
-        //Add an "onclick" event listener for the button that will fetch the data ( Execute Fetch() )
         btnFetch.setOnClickListener(this);
-
     }
-    //Method to parse the Json data
-    public void parseJson(String data) throws JSONException{
-        JSONObject jsonObject = null;
-        try {
-            jsonObject = new JSONObject(data);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
+
+    public void parseJson(String data) throws JSONException {
+        JSONObject jsonObject = new JSONObject(data);
         JSONArray cityArray = jsonObject.getJSONArray("data");
+        boolean cityFound = false;
+
         for (int i = 0; i < cityArray.length(); i++) {
             JSONObject city0 = cityArray.getJSONObject(i);
-            String cityn = city0.get("State").toString();
-            if(cityn.equals(cityName)){
-                String population = city0.get("Population").toString();
+            String cityn = city0.getString("State");
+
+            if (cityn.equals(cityName)) {
+                String population = city0.getString("Population");
                 resultTv.setText(population);
+                cityFound = true;
                 break;
-            }else{
-                resultTv.setText("Not Found");
             }
-
         }
-    }
 
-    protected void onPostExecute(String s){
-        try {
-            parseJson(s);
-        } catch (JSONException e) {
-            e.printStackTrace();
+        if (!cityFound) {
+            resultTv.setText("Not Found");
         }
-    }
-    public void onClick(View v){
-        if(v.getId()==R.id.btn_fet){
-            cityName = cityEd.getText().toString();
-            Toast.makeText(this, cityName, Toast.LENGTH_SHORT);
-            getData();
-        }
-    }
-
-    //method to get the data
-    public void getData(){
-        Uri uri = Uri.parse("https://datausa.io/api/data?drilldowns=State&measures=Population&year=latest").buildUpon().build();
     }
 
     @Override
-    public void onPointerCaptureChanged(boolean hasCapture) {
-        super.onPointerCaptureChanged(hasCapture);
+    public void onClick(View v) {
+        if (v.getId() == R.id.btn_fet) {
+            cityName = cityEd.getText().toString();
+            try {
+                // Execute AsyncTask to fetch data
+                new DOTask().execute(getData());
+            } catch (MalformedURLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public URL getData() throws MalformedURLException {
+        return new URL("https://datausa.io/api/data?drilldowns=State&measures=Population&year=latest");
+    }
+
+    // AsyncTask to make the HTTP request in the background
+    private static class DOTask extends AsyncTask<URL, Void, String> {
+        @Override
+        protected String doInBackground(URL... urls) {
+            URL url = urls[0];
+            String data = null;
+            try {
+                data = NetworkUtils.makeHTTPRequests(url);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return data;
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            // Handle the result after the AsyncTask is done
+            try {
+                // Assuming MainActivity is the outer class
+                MainActivity mainActivity = new MainActivity();
+                mainActivity.parseJson(s);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
     }
 }
